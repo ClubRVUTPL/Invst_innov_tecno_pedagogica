@@ -1,6 +1,6 @@
 rules_version = '2';
-// Reglas del Tablero de Gestión Tecnopedagógica (UTPL).
-// Copia todo este texto en Firebase → Firestore Database → Reglas → Publicar.
+// Reglas del Tablero de Gesti√≥n Tecnopedag√≥gica (UTPL).
+// Copia todo este texto en Firebase ‚Üí Firestore Database ‚Üí Reglas ‚Üí Publicar.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -14,7 +14,7 @@ service cloud.firestore {
       return signedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid));
     }
 
-    // Administradores: se crean a mano en la consola (ID del documento = correo en minúsculas).
+    // Administradores: se crean a mano en la consola (ID del documento = correo en min√∫sculas).
     match /admins/{email} {
       allow read: if isAdmin();
       allow write: if false;
@@ -26,8 +26,8 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Códigos de invitación: nadie puede leerlos ni listarlos, salvo administradores.
-    // Un director solo puede "canjear" un código libre, una vez, a nombre de su propia cuenta.
+    // C√≥digos de invitaci√≥n: nadie puede leerlos ni listarlos, salvo administradores.
+    // Un director solo puede "canjear" un c√≥digo libre, una vez, a nombre de su propia cuenta.
     match /invites/{code} {
       allow read, create, delete: if isAdmin();
       allow update: if isAdmin() || (
