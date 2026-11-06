@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Administración de accesos · Tablero de Gestión Tecnopedagógica</title>
+<style>
+  :root { --az-o: #002F5F; --az: #004A93; --am: #F2B705; --rojo: #C8102E; --verde: #1F7A4D; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; background: #F4F6F9; color: #1B2430; }
+  header { background: var(--az-o); color: #fff; padding: 18px 24px; border-bottom: 5px solid var(--am); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  header .brand { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--am); font-weight: 700; }
+  header h1 { font-family: Georgia, serif; font-weight: 400; font-size: 22px; margin: 2px 0 0; }
+  header .me { font-size: 13px; opacity: .9; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+  section { background: #fff; border-radius: 14px; padding: 20px 22px; box-shadow: 0 2px 10px rgba(0,47,95,.07); border-top: 4px solid var(--az); }
+  h2 { font-size: 17px; margin: 0 0 6px; color: var(--az-o); }
+  p { font-size: 14px; line-height: 1.5; margin: 6px 0; color: #3A4452; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  button, .btn { font: inherit; font-weight: 700; font-size: 14px; padding: 9px 16px; border: 0; border-radius: 999px; background: var(--az); color: #fff; cursor: pointer; text-decoration: none; display: inline-block; }
+  button:hover, .btn:hover { background: var(--az-o); }
+  button.sec { background: #fff; color: var(--az); border: 1px solid var(--az); }
+  button.sec:hover { background: #EEF3F9; }
+  button.danger { background: #fff; color: var(--rojo); border: 1px solid var(--rojo); }
+  button.sm, .btn.sm { font-size: 12px; padding: 5px 10px; }
+  button[disabled] { opacity: .6; cursor: wait; }
+  textarea { width: 100%; min-height: 140px; font: 13px/1.4 ui-monospace, Consolas, monospace; padding: 10px; border: 1px solid #C9D3DF; border-radius: 10px; }
+  input[type=text], input[type=email], input[type=search] { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid #C9D3DF; border-radius: 8px; }
+  .ok { color: var(--verde); font-weight: 600; }
+  .bad { color: var(--rojo); font-weight: 600; }
+  .muted { color: #5B6573; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  th { text-align: left; background: var(--az); color: #fff; padding: 8px; border-bottom: 3px solid var(--am); position: sticky; top: 0; }
+  td { padding: 7px 8px; border-bottom: 1px solid #E3E8EF; vertical-align: top; }
+  tr:nth-child(even) td { background: #F8FAFC; }
+  code { font: 600 13px ui-monospace, Consolas, monospace; letter-spacing: .04em; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .pill.p { background: #FFF4D1; color: #7A5A00; }
+  .pill.u { background: #DDF1E6; color: var(--verde); }
+  .center { min-height: 70vh; display: grid; place-items: center; text-align: center; }
+  .stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; }
+  .stats b { font-size: 20px; color: var(--az-o); display: block; }
+</style>
+<script src="firebase-config.js"></script>
+</head>
+<body>
+<header>
+  <div><div class="brand">UTPL · Administración de accesos</div><h1>Tablero de Gestión Tecnopedagógica</h1></div>
+  <div class="me"><span id="me"></span> <button class="sec sm" id="b-out" style="display:none">Cerrar sesión</button></div>
+</header>
+
+<div class="center" id="v-signin"><div>
+  <p>Ingresa con la cuenta de Google registrada como administradora.</p>
+  <div class="row" style="justify-content:center"><button id="b-in">Ingresar con Google</button></div>
+  <p class="bad" id="m-in"></p>
+</div></div>
+
+<main id="v-admin" style="display:none">
+  <section>
+    <h2>1. Llave del tablero</h2>
+    <p>El contenido del tablero está cifrado. Firebase guarda la llave y solo se la entrega a los directores que activaron su acceso. Se carga una sola vez, con el archivo <code>llave-tablero.json</code>. Ese archivo es confidencial: no lo subas a GitHub.</p>
+    <p id="k-status" class="muted">Revisando…</p>
+    <div class="row"><input type="file" id="k-file" accept=".json,application/json"><button id="k-up">Cargar llave</button></div>
+  </section>
+
+  <section>
+    <h2>2. Crear códigos de acceso</h2>
+    <p>Pega la lista de directores, una persona por línea: <strong>nombre</strong> y <strong>correo institucional</strong>, y si quieres una tercera columna con su carrera o cargo. Puedes copiar las columnas directamente desde Excel. Cada persona recibe un código único que solo sirve una vez.</p>
+    <textarea id="list" placeholder="María Pérez	mperez@utpl.edu.ec	Carrera de Economía&#10;Juan Torres	jtorres@utpl.edu.ec	Departamento de Química"></textarea>
+    <div class="row"><button id="b-gen">Crear códigos</button><span class="muted" id="m-gen"></span></div>
+  </section>
+
+  <section>
+    <h2>3. Directores y códigos</h2>
+    <div class="stats" id="stats"></div>
+    <div class="row">
+      <input type="search" id="q" placeholder="Buscar por nombre, correo o código" style="flex:1;min-width:220px">
+      <button class="sec" id="b-csv">Descargar listado (Excel)</button>
+      <button class="sec" id="b-reload">Actualizar</button>
+    </div>
+    <p class="muted">«Enviar correo» abre tu programa de correo con el mensaje listo para esa persona. Revísalo antes de enviarlo. «Nuevo código» anula el anterior (y el acceso, si ya lo había activado) y crea otro para la misma persona. «Quitar» le retira el acceso por completo.</p>
+    <div style="max-height:560px;overflow:auto"><table>
+      <thead><tr><th>Nombre</th><th>Correo UTPL</th><th>Código</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table></div>
+  </section>
+</main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js';
+import { getFirestore, doc, getDoc, getDocs, setDoc, collection, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js';
+
+const $ = (id) => document.getElementById(id);
+const cfg = window.FIREBASE_CONFIG;
+if (!cfg || !cfg.apiKey || /PEGAR/.test(cfg.apiKey)) { document.body.innerHTML = '<p style="padding:40px;font-family:sans-serif">Falta configurar Firebase en <code>firebase-config.js</code>.</p>'; throw new Error('sin config'); }
+const app = initializeApp(cfg), auth = getAuth(app), db = getFirestore(app);
+const BOARD = new URL('./', location.href).href;
+const ALPH = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+let invites = [];
+
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (c) => c.match(/.{1,4}/g).join('-');
+const fecha = (t) => t && t.toDate ? t.toDate().toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }) : '';
+function newCode() { const r = crypto.getRandomValues(new Uint32Array(12)); let s = ''; for (const x of r) s += ALPH[x % ALPH.length]; return s; }
+
+$('b-in').onclick = () => { const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' }); signInWithPopup(auth, p).catch((e) => { $('m-in').textContent = 'No se pudo ingresar (' + e.code + ').'; }); };
+$('b-out').onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, async (user) => {
+  $('v-signin').style.display = user ? 'none' : ''; $('v-admin').style.display = 'none';
+  $('b-out').style.display = user ? '' : 'none'; $('me').textContent = user ? user.email : '';
+  if (!user) return;
+  try {
+    const a = await getDoc(doc(db, 'admins', (user.email || '').toLowerCase()));
+    if (!a.exists()) throw { code: 'permission-denied' };
+  } catch (e) {
+    $('v-signin').style.display = ''; $('m-in').textContent = 'La cuenta ' + user.email + ' no está registrada como administradora.'; return;
+  }
+  $('v-admin').style.display = '';
+  checkKey(); load();
+});
+
+async function checkKey() {
+  const s = await getDoc(doc(db, 'config', 'llave'));
+  $('k-status').innerHTML = s.exists() ? '<span class="ok">✓ Llave cargada</span> · huella ' + esc(s.data().huella || '—') + ' · ' + esc(fecha(s.data().cargada)) : '<span class="bad">Todavía no se ha cargado la llave.</span> Los directores no podrán abrir el tablero hasta que la cargues.';
+}
+$('k-up').onclick = async () => {
+  const f = $('k-file').files[0]; if (!f) { alertMsg('Elige el archivo llave-tablero.json.'); return; }
+  try {
+    const j = JSON.parse(await f.text());
+    if (j.tipo !== 'llave-tablero-utpl' || !j.k) throw new Error('Ese archivo no es la llave del tablero.');
+    await setDoc(doc(db, 'config', 'llave'), { k: j.k, huella: j.huella || '', cargada: serverTimestamp() });
+    $('k-file').value = ''; checkKey();
+  } catch (e) { $('k-status').innerHTML = '<span class="bad">' + esc(e.message || e.code) + '</span>'; }
+};
+function alertMsg(t) { $('k-status').innerHTML = '<span class="bad">' + esc(t) + '</span>'; }
+
+async function load() {
+  const s = await getDocs(collection(db, 'invites'));
+  invites = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  render();
+}
+$('b-reload').onclick = load;
+$('q').oninput = render;
+
+function mailto(i) {
+  const subj = 'Acceso al Tablero de Gestión Tecnopedagógica · UTPL';
+  const body = 'Estimado/a ' + i.nombre + ':\n\n' +
+    'La Dirección de Investigación e Innovación Tecnopedagógica le da acceso al Tablero de Gestión Tecnopedagógica.\n\n' +
+    'Enlace: ' + BOARD + '\n' +
+    'Su código de acceso personal: ' + fmt(i.id) + '\n\n' +
+    'Cómo ingresar:\n' +
+    '1. Abra el enlace y pulse «Ingresar con Google». Puede usar una cuenta de Gmail o crear una cuenta de Google con su correo institucional.\n' +
+    '2. La primera vez, escriba su código. Quedará vinculado a esa cuenta de Google y no podrá usarse con otra.\n' +
+    '3. Las siguientes veces solo necesitará ingresar con la misma cuenta de Google.\n\n' +
+    'Este código es personal; por favor no lo comparta.\n\n' +
+    'Si tiene problemas al ingresar, escriba a jbsamaniego@utpl.edu.ec.\n\nSaludos cordiales.';
+  return 'mailto:' + encodeURIComponent(i.correo || '') + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body);
+}
+
+function render() {
+  const q = $('q').value.trim().toLowerCase();
+  const used = invites.filter((i) => i.uid).length;
+  $('stats').innerHTML = '<div><b>' + invites.length + '</b>códigos</div><div><b>' + used + '</b>activados</div><div><b>' + (invites.length - used) + '</b>pendientes</div>';
+  $('tb').innerHTML = invites.filter((i) => !q || [i.nombre, i.correo, i.detalle, i.id, i.email].join(' ').toLowerCase().includes(q.replace(/-/g, ''))).map((i) =>
+    '<tr><td>' + esc(i.nombre) + (i.detalle ? '<div class="muted">' + esc(i.detalle) + '</div>' : '') + '</td>' +
+    '<td>' + esc(i.correo) + '</td><td><code>' + esc(fmt(i.id)) + '</code></td>' +
+    '<td>' + (i.uid ? '<span class="pill u">Activado</span><div class="muted">' + esc(i.email) + '<br>' + esc(fecha(i.usado)) + '</div>' : '<span class="pill p">Pendiente</span>') + '</td>' +
+    '<td style="white-space:nowrap"><a class="btn sm" href="' + esc(mailto(i)) + '">Enviar correo</a> ' +
+    '<button class="sec sm" data-act="new" data-id="' + esc(i.id) + '">Nuevo código</button> ' +
+    '<button class="danger sm" data-act="del" data-id="' + esc(i.id) + '">Quitar</button></td></tr>').join('') ||
+    '<tr><td colspan="5" class="muted">Sin códigos todavía.</td></tr>';
+}
+
+$('tb').onclick = async (ev) => {
+  const b = ev.target.closest('button[data-act]'); if (!b) return;
+  const i = invites.find((x) => x.id === b.dataset.id); if (!i) return;
+  const act = b.dataset.act;
+  const msg = act === 'del' ? '¿Quitar el acceso de ' + i.nombre + '? Su código dejará de funcionar' + (i.uid ? ' y ya no podrá abrir el tablero.' : '.') :
+    '¿Crear un código nuevo para ' + i.nombre + '? El actual dejará de funcionar' + (i.uid ? ' y tendrá que activar su acceso otra vez.' : '.');
+  if (!confirm(msg)) return;
+  b.disabled = true;
+  const w = writeBatch(db);
+  w.delete(doc(db, 'invites', i.id));
+  if (i.uid) w.delete(doc(db, 'members', i.uid));
+  if (act === 'new') w.set(doc(db, 'invites', newCode()), { nombre: i.nombre, correo: i.correo || '', detalle: i.detalle || '', creado: serverTimestamp() });
+  try { await w.commit(); await load(); } catch (e) { alert('No se pudo completar (' + e.code + ').'); b.disabled = false; }
+};
+
+$('b-gen').onclick = async () => {
+  const have = new Set(invites.map((i) => (i.correo || '').toLowerCase()).filter(Boolean));
+  const rows = [], skipped = [];
+  for (const line of $('list').value.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const parts = line.split(/\t|;|,/).map((s) => s.trim()).filter(Boolean);
+    const correo = (parts.find((p) => p.includes('@')) || '').toLowerCase();
+    const rest = parts.filter((p) => !p.includes('@'));
+    const nombre = rest[0] || '';
+    if (!nombre || /^nombre/i.test(nombre)) { if (nombre) continue; skipped.push(line); continue; }
+    if (correo && have.has(correo)) { skipped.push(nombre + ' (ya tiene código)'); continue; }
+    if (correo) have.add(correo);
+    rows.push({ nombre, correo, detalle: rest.slice(1).join(' · ') });
+  }
+  if (!rows.length) { $('m-gen').textContent = 'No encontré personas nuevas en la lista.' + (skipped.length ? ' Omitidas: ' + skipped.join(', ') : ''); return; }
+  $('b-gen').disabled = true; $('m-gen').textContent = 'Creando ' + rows.length + ' códigos…';
+  try {
+    for (let k = 0; k < rows.length; k += 400) {
+      const w = writeBatch(db);
+      rows.slice(k, k + 400).forEach((r) => w.set(doc(db, 'invites', newCode()), { ...r, creado: serverTimestamp() }));
+      await w.commit();
+    }
+    $('list').value = '';
+    $('m-gen').textContent = '✓ ' + rows.length + ' códigos creados.' + (skipped.length ? ' Omitidas: ' + skipped.join(', ') : '');
+    await load();
+  } catch (e) { $('m-gen').textContent = 'No se pudo crear los códigos (' + e.code + ').'; }
+  $('b-gen').disabled = false;
+};
+
+$('b-csv').onclick = async () => {
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
+  const rows = invites.map((i) => ({ 'Nombre': i.nombre, 'Correo UTPL': i.correo || '', 'Carrera o cargo': i.detalle || '', 'Código': fmt(i.id), 'Enlace': BOARD, 'Estado': i.uid ? 'Activado' : 'Pendiente', 'Cuenta de Google': i.email || '', 'Fecha de activación': fecha(i.usado) }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{ wch: 34 }, { wch: 28 }, { wch: 34 }, { wch: 16 }, { wch: 40 }, { wch: 11 }, { wch: 30 }, { wch: 18 }];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Códigos');
+  XLSX.writeFile(wb, 'codigos_acceso_tablero.xlsx');
+};
+</script>
+</body>
+</html>
