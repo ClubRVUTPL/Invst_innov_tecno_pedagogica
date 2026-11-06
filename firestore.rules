@@ -1,0 +1,59 @@
+rules_version = '2';
+// Reglas del Tablero de Gestión Tecnopedagógica (UTPL).
+// Copia todo este texto en Firebase → Firestore Database → Reglas → Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower()));
+    }
+    function isMember() {
+      return signedIn() && exists(/databases/$(database)/documents/members/$(request.auth.uid));
+    }
+
+    // Administradores: se crean a mano en la consola (ID del documento = correo en minúsculas).
+    match /admins/{email} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Llave para abrir el tablero: solo la leen directores con acceso activado y administradores.
+    match /config/{id} {
+      allow read: if isMember() || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Códigos de invitación: nadie puede leerlos ni listarlos, salvo administradores.
+    // Un director solo puede "canjear" un código libre, una vez, a nombre de su propia cuenta.
+    match /invites/{code} {
+      allow read, create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        signedIn()
+        && !('uid' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'email', 'usado'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.usado == request.time
+        && getAfter(/databases/$(database)/documents/members/$(request.auth.uid)).data.code == code
+      );
+    }
+
+    // Directores con acceso activado (uno por cuenta de Google).
+    match /members/{uid} {
+      allow get: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow list, delete: if isAdmin();
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['code', 'email', 'creado'])
+        && request.resource.data.code is string
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.creado == request.time
+        && !('uid' in get(/databases/$(database)/documents/invites/$(request.resource.data.code)).data)
+        && getAfter(/databases/$(database)/documents/invites/$(request.resource.data.code)).data.uid == uid;
+      allow update: if false;
+    }
+  }
+}
