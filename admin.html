@@ -40,6 +40,16 @@
   .pill.u { background: #DDF1E6; color: var(--verde); }
   .center { min-height: 70vh; display: grid; place-items: center; text-align: center; }
   .stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; }
+  .modal { position: fixed; inset: 0; background: rgba(0,31,63,.55); display: none; place-items: center; padding: 16px; z-index: 20; }
+  .modal.on { display: grid; }
+  .mbox { background: #fff; border-radius: 14px; width: min(100%, 680px); max-height: 92vh; overflow: auto; box-shadow: 0 24px 60px rgba(0,0,0,.3); }
+  .mhead { background: var(--az-o); color: #fff; padding: 14px 20px; border-bottom: 4px solid var(--am); display: flex; justify-content: space-between; align-items: center; }
+  .mhead h3 { margin: 0; font-size: 16px; }
+  .mhead button { background: none; font-size: 22px; padding: 0 6px; }
+  .mbody { padding: 16px 20px 20px; }
+  .fld { font-size: 12px; color: #5B6573; font-weight: 700; margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .val { font-size: 14px; background: #F4F6F9; border: 1px solid #E3E8EF; border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; }
+  .pill.s { background: #E3EDF8; color: var(--az); }
   .stats b { font-size: 20px; color: var(--az-o); display: block; }
 </style>
 <script src="firebase-config.js"></script>
@@ -79,13 +89,34 @@
       <button class="sec" id="b-csv">Descargar listado (Excel)</button>
       <button class="sec" id="b-reload">Actualizar</button>
     </div>
-    <p class="muted">«Enviar correo» abre tu programa de correo con el mensaje listo para esa persona. Revísalo antes de enviarlo. «Nuevo código» anula el anterior (y el acceso, si ya lo había activado) y crea otro para la misma persona. «Quitar» le retira el acceso por completo.</p>
+    <p class="muted">«Enviar correo» muestra el mensaje completo y te deja abrirlo listo en Outlook (tu correo UTPL) o en Gmail; tú lo envías desde ahí y luego lo marcas como enviado. «Nuevo código» anula el anterior (y el acceso, si ya lo había activado) y crea otro para la misma persona. «Quitar» le retira el acceso por completo.</p>
     <div style="max-height:560px;overflow:auto"><table>
       <thead><tr><th>Nombre</th><th>Correo UTPL</th><th>Código</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody id="tb"></tbody>
     </table></div>
   </section>
 </main>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true">
+  <div class="mbox">
+    <div class="mhead"><h3>Correo para <span id="e-name"></span></h3><button id="e-x" aria-label="Cerrar">×</button></div>
+    <div class="mbody">
+      <p class="muted" style="margin-top:0">Este panel no envía correos por sí solo. Elige con qué cuenta enviarlo: se abrirá el mensaje ya escrito en una pestaña nueva y tú pulsas «Enviar». Luego vuelve aquí y márcalo como enviado.</p>
+      <div class="fld">Para</div><div class="val" id="e-to"></div>
+      <div class="fld">Asunto</div><div class="val" id="e-subj"></div>
+      <div class="fld">Mensaje</div><div class="val" id="e-body"></div>
+      <div class="row">
+        <a class="btn" id="e-outlook" target="_blank" rel="noopener">Abrir en Outlook (correo UTPL)</a>
+        <a class="btn" id="e-gmail" target="_blank" rel="noopener">Abrir en Gmail</a>
+        <button class="sec" id="e-copy">Copiar mensaje</button>
+      </div>
+      <div class="row" style="justify-content:space-between;border-top:1px solid #E3E8EF;padding-top:12px;margin-top:16px">
+        <span class="muted" id="e-state"></span>
+        <button id="e-sent">Marcar como enviado</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js';
@@ -145,7 +176,7 @@ async function load() {
 $('b-reload').onclick = load;
 $('q').oninput = render;
 
-function mailto(i) {
+function email(i) {
   const subj = 'Acceso al Tablero de Gestión Tecnopedagógica · UTPL';
   const body = 'Estimado/a ' + i.nombre + ':\n\n' +
     'La Dirección de Investigación e Innovación Tecnopedagógica le da acceso al Tablero de Gestión Tecnopedagógica.\n\n' +
@@ -157,18 +188,46 @@ function mailto(i) {
     '3. Las siguientes veces solo necesitará ingresar con la misma cuenta de Google.\n\n' +
     'Este código es personal; por favor no lo comparta.\n\n' +
     'Si tiene problemas al ingresar, escriba a jbsamaniego@utpl.edu.ec.\n\nSaludos cordiales.';
-  return 'mailto:' + encodeURIComponent(i.correo || '') + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body);
+  const to = i.correo || '', e = encodeURIComponent;
+  return { to, subj, body,
+    gmail: 'https://mail.google.com/mail/?view=cm&fs=1&to=' + e(to) + '&su=' + e(subj) + '&body=' + e(body),
+    outlook: 'https://outlook.office.com/mail/deeplink/compose?to=' + e(to) + '&subject=' + e(subj) + '&body=' + e(body) };
 }
+let cur = null;
+function openMail(i) {
+  cur = i; const m = email(i);
+  $('e-name').textContent = i.nombre; $('e-to').textContent = m.to || '(sin correo registrado)';
+  $('e-subj').textContent = m.subj; $('e-body').textContent = m.body;
+  $('e-gmail').href = m.gmail; $('e-outlook').href = m.outlook;
+  $('e-state').textContent = i.enviado ? 'Marcado como enviado el ' + fecha(i.enviado) : 'Aún no marcado como enviado.';
+  $('e-sent').textContent = i.enviado ? 'Ya enviado ✓' : 'Marcar como enviado'; $('e-sent').disabled = !!i.enviado;
+  $('modal').classList.add('on');
+}
+const closeMail = () => { $('modal').classList.remove('on'); cur = null; };
+$('e-x').onclick = closeMail;
+$('modal').onclick = (ev) => { if (ev.target.id === 'modal') closeMail(); };
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closeMail(); });
+$('e-copy').onclick = async () => {
+  const m = email(cur);
+  try { await navigator.clipboard.writeText('Para: ' + m.to + '\nAsunto: ' + m.subj + '\n\n' + m.body); $('e-copy').textContent = 'Copiado ✓'; }
+  catch (e) { $('e-copy').textContent = 'No se pudo copiar'; }
+  setTimeout(() => { $('e-copy').textContent = 'Copiar mensaje'; }, 2000);
+};
+$('e-sent').onclick = async () => {
+  if (!cur) return; $('e-sent').disabled = true;
+  try { const w = writeBatch(db); w.update(doc(db, 'invites', cur.id), { enviado: serverTimestamp() }); await w.commit(); await load(); closeMail(); }
+  catch (e) { $('e-state').textContent = 'No se pudo guardar (' + e.code + ').'; $('e-sent').disabled = false; }
+};
 
 function render() {
   const q = $('q').value.trim().toLowerCase();
   const used = invites.filter((i) => i.uid).length;
-  $('stats').innerHTML = '<div><b>' + invites.length + '</b>códigos</div><div><b>' + used + '</b>activados</div><div><b>' + (invites.length - used) + '</b>pendientes</div>';
+  $('stats').innerHTML = '<div><b>' + invites.length + '</b>códigos</div><div><b>' + used + '</b>activados</div><div><b>' + invites.filter((i) => i.enviado && !i.uid).length + '</b>correo enviado, sin activar</div><div><b>' + invites.filter((i) => !i.enviado && !i.uid).length + '</b>sin enviar</div>';
   $('tb').innerHTML = invites.filter((i) => !q || [i.nombre, i.correo, i.detalle, i.id, i.email].join(' ').toLowerCase().includes(q.replace(/-/g, ''))).map((i) =>
     '<tr><td>' + esc(i.nombre) + (i.detalle ? '<div class="muted">' + esc(i.detalle) + '</div>' : '') + '</td>' +
     '<td>' + esc(i.correo) + '</td><td><code>' + esc(fmt(i.id)) + '</code></td>' +
-    '<td>' + (i.uid ? '<span class="pill u">Activado</span><div class="muted">' + esc(i.email) + '<br>' + esc(fecha(i.usado)) + '</div>' : '<span class="pill p">Pendiente</span>') + '</td>' +
-    '<td style="white-space:nowrap"><a class="btn sm" href="' + esc(mailto(i)) + '">Enviar correo</a> ' +
+    '<td>' + (i.uid ? '<span class="pill u">Activado</span><div class="muted">' + esc(i.email) + '<br>' + esc(fecha(i.usado)) + '</div>' : (i.enviado ? '<span class="pill s">Correo enviado</span><div class="muted">' + esc(fecha(i.enviado)) + '</div>' : '<span class="pill p">Pendiente</span>')) + '</td>' +
+    '<td style="white-space:nowrap"><button class="sm" data-act="mail" data-id="' + esc(i.id) + '">' + (i.enviado ? 'Ver correo' : 'Enviar correo') + '</button> ' +
     '<button class="sec sm" data-act="new" data-id="' + esc(i.id) + '">Nuevo código</button> ' +
     '<button class="danger sm" data-act="del" data-id="' + esc(i.id) + '">Quitar</button></td></tr>').join('') ||
     '<tr><td colspan="5" class="muted">Sin códigos todavía.</td></tr>';
@@ -178,6 +237,7 @@ $('tb').onclick = async (ev) => {
   const b = ev.target.closest('button[data-act]'); if (!b) return;
   const i = invites.find((x) => x.id === b.dataset.id); if (!i) return;
   const act = b.dataset.act;
+  if (act === 'mail') { openMail(i); return; }
   const msg = act === 'del' ? '¿Quitar el acceso de ' + i.nombre + '? Su código dejará de funcionar' + (i.uid ? ' y ya no podrá abrir el tablero.' : '.') :
     '¿Crear un código nuevo para ' + i.nombre + '? El actual dejará de funcionar' + (i.uid ? ' y tendrá que activar su acceso otra vez.' : '.');
   if (!confirm(msg)) return;
@@ -220,9 +280,9 @@ $('b-gen').onclick = async () => {
 
 $('b-csv').onclick = async () => {
   const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
-  const rows = invites.map((i) => ({ 'Nombre': i.nombre, 'Correo UTPL': i.correo || '', 'Carrera o cargo': i.detalle || '', 'Código': fmt(i.id), 'Enlace': BOARD, 'Estado': i.uid ? 'Activado' : 'Pendiente', 'Cuenta de Google': i.email || '', 'Fecha de activación': fecha(i.usado) }));
+  const rows = invites.map((i) => ({ 'Nombre': i.nombre, 'Correo UTPL': i.correo || '', 'Carrera o cargo': i.detalle || '', 'Código': fmt(i.id), 'Enlace': BOARD, 'Estado': i.uid ? 'Activado' : (i.enviado ? 'Correo enviado' : 'Sin enviar'), 'Correo enviado': fecha(i.enviado), 'Cuenta de Google': i.email || '', 'Fecha de activación': fecha(i.usado) }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 34 }, { wch: 28 }, { wch: 34 }, { wch: 16 }, { wch: 40 }, { wch: 11 }, { wch: 30 }, { wch: 18 }];
+  ws['!cols'] = [{ wch: 34 }, { wch: 28 }, { wch: 34 }, { wch: 16 }, { wch: 40 }, { wch: 15 }, { wch: 16 }, { wch: 30 }, { wch: 18 }];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Códigos');
   XLSX.writeFile(wb, 'codigos_acceso_tablero.xlsx');
 };
