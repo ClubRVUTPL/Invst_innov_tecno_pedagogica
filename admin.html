@@ -178,8 +178,8 @@ $('q').oninput = render;
 
 function email(i) {
   const subj = 'Acceso al Tablero de Gestión Tecnopedagógica · UTPL';
-  const body = 'Estimado/a ' + i.nombre + ':\n\n' +
-    'La Dirección de Investigación e Innovación Tecnopedagógica le da acceso al Tablero de Gestión Tecnopedagógica.\n\n' +
+  const body = 'Estimado/a ' + i.nombre + (i.detalle ? '\n' + i.detalle : '') + ':\n\n' +
+    'Con la finalidad de facilitar su gestión y apoyar el seguimiento de algunos indicadores de la planificación operativa anual, la Dirección de Investigación e Innovación Tecnopedagógica ha creado el Tablero de Gestión Tecnopedagógica, al cual le damos acceso.\n\n' +
     'Enlace: ' + BOARD + '\n' +
     'Su código de acceso personal: ' + fmt(i.id) + '\n\n' +
     'Cómo ingresar:\n' +
