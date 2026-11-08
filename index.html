@@ -94,7 +94,7 @@ let FS = null;
 const fs = () => FS || (FS = import('https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js').then((m) => ({ m, db: m.getFirestore(app) })));
 // Datos cifrados del tablero: se descargan en segundo plano mientras la persona ingresa.
 let dataP = null;
-const getData = () => dataP || (dataP = fetch('tablero.bin?v=7c044811f2').then((r) => { if (!r.ok) throw new Error('datos-' + r.status); return r.arrayBuffer(); }).catch((e) => { dataP = null; throw e; }));
+const getData = () => dataP || (dataP = fetch('tablero.bin?v=1979fabf42').then((r) => { if (!r.ok) throw new Error('datos-' + r.status); return r.arrayBuffer(); }).catch((e) => { dataP = null; throw e; }));
 
 var $ = function (id) { return document.getElementById(id); };
 function show(v, txt) { ['v-load', 'v-signin', 'v-code'].forEach(function (id) { $(id).classList.toggle('on', id === v); }); if (txt) $('load-txt').textContent = txt; }
