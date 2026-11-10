@@ -92,9 +92,10 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.2.0/firebas
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js';
 let FS = null;
 const fs = () => FS || (FS = import('https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js').then((m) => ({ m, db: m.getFirestore(app) })));
-// Datos cifrados del tablero: se descargan en segundo plano mientras la persona ingresa.
-let dataP = null;
-const getData = () => dataP || (dataP = fetch('tablero.bin?v=1979fabf42').then((r) => { if (!r.ok) throw new Error('datos-' + r.status); return r.arrayBuffer(); }).catch((e) => { dataP = null; throw e; }));
+// Interfaz del tablero (sin datos): se descarga en segundo plano mientras la persona ingresa.
+let appP = null;
+const getApp = () => appP || (appP = fetch('app.html?v=b04f73ddfc').then((r) => { if (!r.ok) throw new Error('datos-' + r.status); return r.text(); }).catch((e) => { appP = null; throw e; }));
+const getBin = (id) => fetch('datos/' + id + '.bin?v=577f7cf5f5').then((r) => { if (!r.ok) throw new Error('datos-' + r.status); return r.arrayBuffer(); });
 
 var $ = function (id) { return document.getElementById(id); };
 function show(v, txt) { ['v-load', 'v-signin', 'v-code'].forEach(function (id) { $(id).classList.toggle('on', id === v); }); if (txt) $('load-txt').textContent = txt; }
@@ -105,24 +106,48 @@ if (!cfg || !cfg.apiKey || /PEGAR/.test(cfg.apiKey)) { show('v-load', 'Falta con
 if (!window.crypto || !window.crypto.subtle) { show('v-load', 'Abre el tablero desde su enlace https:// en un navegador actualizado.'); document.querySelector('.spin').style.display = 'none'; throw new Error('sin crypto'); }
 
 var app = initializeApp(cfg), auth = getAuth(app);
-setTimeout(getData, 0);
+setTimeout(getApp, 0);
 var params = new URLSearchParams(location.search);
 if (params.has('salir')) { history.replaceState(null, '', location.pathname); signOut(auth); }
 
-function openBoard() {
+function openPkg(f, keyDoc, file) {
+  return Promise.all([f.m.getDoc(f.m.doc(f.db, 'config', keyDoc)), getBin(file)]).then(function (r) {
+    if (!r[0].exists()) throw new Error('sin-llave');
+    var bin = new Uint8Array(r[1]);
+    return crypto.subtle.importKey('raw', dec(r[0].data().k), 'AES-GCM', false, ['decrypt'])
+      .then(function (k) { return crypto.subtle.decrypt({ name: 'AES-GCM', iv: bin.subarray(0, 12) }, k, bin.subarray(12)); })
+      .then(function (buf) { return JSON.parse(new TextDecoder('utf-8').decode(buf)); });
+  });
+}
+function openBoard(user) {
   show('v-load', 'Abriendo tableros…');
-  return fs().then(function (f) { return Promise.all([f.m.getDoc(f.m.doc(f.db, 'config', 'llave')), getData()]); }).then(function (r) {
-    var s = r[0], bin = new Uint8Array(r[1]);
-    if (!s.exists()) throw new Error('sin-llave');
-    return crypto.subtle.importKey('raw', dec(s.data().k), 'AES-GCM', false, ['decrypt'])
-      .then(function (k) { return crypto.subtle.decrypt({ name: 'AES-GCM', iv: bin.subarray(0, 12) }, k, bin.subarray(12)); });
-  }).then(function (buf) { var html = new TextDecoder('utf-8').decode(buf); document.open(); document.write(html); document.close(); });
+  var f;
+  return fs().then(function (x) { f = x; return f.m.getDoc(f.m.doc(f.db, 'members', user.uid)); })
+    .then(function (ms) { return f.m.getDoc(f.m.doc(f.db, 'invites', ms.data().code)); })
+    .then(function (is) {
+      var inv = is.exists() ? is.data() : {};
+      var total = inv.total !== false;
+      var ids = total ? ['total'] : (inv.carreras || []);
+      if (!ids.length) throw new Error('sin-ambito');
+      return Promise.all(ids.map(function (id) { return openPkg(f, id === 'total' ? 'llave' : id, id); }));
+    })
+    .then(function (pk) {
+      var D = { asig: [], av: { avance: [], guias: [], docentes: [], deptos: [] }, sat: [] };
+      pk.forEach(function (p) { D.asig = D.asig.concat(p.asig); ['avance', 'guias', 'docentes', 'deptos'].forEach(function (k) { D.av[k] = D.av[k].concat(p.av[k]); }); D.sat = D.sat.concat(p.sat); });
+      var total = pk.some(function (p) { return p.meta.total; });
+      var A = { total: total, nombres: total ? [] : pk.map(function (p) { return p.meta.nombre; }) };
+      if (!total && pk.length === 1) { var m = pk[0].meta; A.def = { carrera: m.met[0] || null, av_car: m.av[0] || null, sat_car: m.sat[0] || null }; }
+      var js = function (o) { return JSON.stringify(o).replace(/</g, '\\u003c'); };
+      var inject = 'window.DATOS_ASIGNATURAS = ' + js(D.asig) + ';\nwindow.DATOS_AV = ' + js(D.av) + ';\nwindow.DATOS_SAT = ' + js(D.sat) + ';\nwindow.AMBITO = ' + js(A) + ';';
+      return getApp().then(function (html) { return html.replace('/*__DATOS__*/', function () { return inject; }); });
+    })
+    .then(function (html) { document.open(); document.write(html); document.close(); });
 }
 
 function fail(where, e) {
   console.error(e);
   var c = (e && (e.code || e.message)) || 'error';
-  var t = c === 'sin-llave' ? 'El tablero aún no tiene su llave cargada. Avisa a la Dirección.' :
+  var t = c === 'sin-ambito' ? 'Tu acceso todavía no tiene una carrera asignada. Avisa a la Dirección.' : c === 'sin-llave' ? 'El tablero aún no tiene su llave cargada. Avisa a la Dirección.' :
           /OperationError/.test(e && e.name) ? 'La llave cargada no corresponde a esta versión del tablero. Avisa a la Dirección.' :
           /^datos-|Failed to fetch/.test(c) ? 'No se pudieron descargar los datos del tablero. Revisa tu conexión y recarga la página.' : 'No se pudo abrir el tablero (' + c + ').';
   $(where).textContent = t;
@@ -132,7 +157,7 @@ onAuthStateChanged(auth, function (user) {
   if (!user) { show('v-signin'); return; }
   show('v-load', 'Verificando tu acceso…');
   fs().then(function (f) { return f.m.getDoc(f.m.doc(f.db, 'members', user.uid)); }).then(function (s) {
-    if (s.exists()) return openBoard();
+    if (s.exists()) return openBoard(user);
     $('who').textContent = 'Cuenta de Google: ' + (user.email || user.uid);
     show('v-code'); $('code').focus();
   }).catch(function (e) { show('v-signin'); fail('m-signin', e); });
@@ -159,7 +184,7 @@ function activate() {
     b.set(m.doc(db, 'members', user.uid), { code: code, email: user.email, creado: m.serverTimestamp() });
     b.update(m.doc(db, 'invites', code), { uid: user.uid, email: user.email, usado: m.serverTimestamp() });
     return b.commit();
-  }).then(openBoard).catch(function (e) {
+  }).then(function () { return openBoard(user); }).catch(function (e) {
     $('b-code').disabled = false; $('b-code').textContent = 'Activar acceso';
     if (e && (e.code === 'permission-denied' || e.code === 'not-found')) $('m-code').textContent = 'El código no es válido o ya fue usado con otra cuenta.';
     else fail('m-code', e);

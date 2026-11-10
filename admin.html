@@ -53,6 +53,7 @@
   .stats b { font-size: 20px; color: var(--az-o); display: block; }
 </style>
 <script src="firebase-config.js"></script>
+<script src="carreras.js"></script>
 </head>
 <body>
 <header>
@@ -69,7 +70,7 @@
 <main id="v-admin" style="display:none">
   <section>
     <h2>1. Llave del tablero</h2>
-    <p>El contenido del tablero está cifrado. Firebase guarda la llave y solo se la entrega a los directores que activaron su acceso. Se carga una sola vez, con el archivo <code>llave-tablero.json</code>. Ese archivo es confidencial: no lo subas a GitHub.</p>
+    <p>El contenido del tablero está cifrado. Firebase guarda la llave y solo se la entrega a los directores que activaron su acceso. Hay una llave general (acceso completo) y una por carrera; todas van en el archivo <code>llave-tablero.json</code>. Vuelve a cargarlo cuando te entregue una versión nueva. Ese archivo es confidencial: no lo subas a GitHub.</p>
     <p id="k-status" class="muted">Revisando…</p>
     <div class="row"><input type="file" id="k-file" accept=".json,application/json"><button id="k-up">Cargar llave</button></div>
   </section>
@@ -77,6 +78,7 @@
   <section>
     <h2>2. Crear códigos de acceso</h2>
     <p>Pega la lista de directores, una persona por línea: <strong>nombre</strong> y <strong>correo institucional</strong>, y si quieres una tercera columna con su carrera o cargo. Puedes copiar las columnas directamente desde Excel. Cada persona recibe un código único que solo sirve una vez.</p>
+    <p class="muted">Ámbito: si la tercera columna dice «Director/a o Subdirector/a de la Carrera de …», el código queda limitado a esa carrera. En cualquier otro caso, el código tiene acceso completo. Puedes cambiarlo después con el botón «Ámbito».</p>
     <textarea id="list" placeholder="María Pérez	mperez@utpl.edu.ec	Carrera de Economía&#10;Juan Torres	jtorres@utpl.edu.ec	Departamento de Química"></textarea>
     <div class="row"><button id="b-gen">Crear códigos</button><span class="muted" id="m-gen"></span></div>
   </section>
@@ -88,10 +90,12 @@
       <input type="search" id="q" placeholder="Buscar por nombre, correo o código" style="flex:1;min-width:220px">
       <button class="sec" id="b-csv">Descargar listado (Excel)</button>
       <button class="sec" id="b-reload">Actualizar</button>
+      <label class="btn" style="background:#fff;color:#004A93;border:1px solid #004A93">Asignar ámbitos desde Excel de directores<input type="file" id="x-file" accept=".xlsx,.xls" hidden></label>
     </div>
+    <p class="muted" id="m-x"></p>
     <p class="muted">«Enviar correo» muestra el mensaje completo y te deja abrirlo listo en Outlook (tu correo UTPL) o en Gmail; tú lo envías desde ahí y luego lo marcas como enviado. «Nuevo código» anula el anterior (y el acceso, si ya lo había activado) y crea otro para la misma persona. «Quitar» le retira el acceso por completo.</p>
     <div style="max-height:560px;overflow:auto"><table>
-      <thead><tr><th>Nombre</th><th>Correo UTPL</th><th>Código</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <thead><tr><th>Nombre</th><th>Correo UTPL</th><th>Código</th><th>Ámbito</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody id="tb"></tbody>
     </table></div>
   </section>
@@ -118,6 +122,19 @@
   </div>
 </div>
 
+<div class="modal" id="amb" role="dialog" aria-modal="true">
+  <div class="mbox">
+    <div class="mhead"><h3>Ámbito de <span id="a-name"></span></h3><button id="a-x" aria-label="Cerrar">×</button></div>
+    <div class="mbody">
+      <label style="display:flex;gap:8px;align-items:center;font-weight:700"><input type="checkbox" id="a-total"> Acceso completo (todas las facultades, carreras y departamentos)</label>
+      <p class="muted">Si no marcas acceso completo, elige una o más carreras. La persona verá solo los datos de esas carreras.</p>
+      <input type="search" id="a-q" placeholder="Buscar carrera" style="width:100%">
+      <div id="a-list" style="max-height:300px;overflow:auto;border:1px solid #E3E8EF;border-radius:8px;padding:6px 10px;margin-top:8px;display:grid;gap:4px"></div>
+      <div class="row" style="justify-content:flex-end"><span class="muted" id="a-msg"></span><button id="a-save">Guardar ámbito</button></div>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js';
@@ -129,6 +146,19 @@ if (!cfg || !cfg.apiKey || /PEGAR/.test(cfg.apiKey)) { document.body.innerHTML =
 const app = initializeApp(cfg), auth = getAuth(app), db = getFirestore(app);
 const BOARD = new URL('./', location.href).href;
 const ALPH = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+const CARS = window.CARRERAS || [];
+const norm = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const CAR_BY = new Map(CARS.map((c) => [norm(c.nombre), c]));
+const CAR_NAME = new Map(CARS.map((c) => [c.id, c.nombre]));
+// «Director/a o Subdirector/a de la Carrera de X[, modalidad …]» → carrera; otro cargo → acceso completo.
+function ambitoDe(texto) {
+  const m = String(texto || '').match(/carrera\s+de\s+(.+)/i);
+  if (!m) return { total: true, carreras: [], sin: null };
+  const nom = m[1].replace(/\s*[,·;]\s*modalidad.*$/i, '').replace(/\s+modalidad\s+.*$/i, '').trim();
+  const c = CAR_BY.get(norm(nom));
+  return c ? { total: false, carreras: [c.id], sin: null } : { total: false, carreras: [], sin: nom };
+}
+const ambTxt = (i) => i.total === false ? ((i.carreras || []).map((id) => esc(CAR_NAME.get(id) || id)).join(', ') || '<span class="bad">Sin carrera</span>') : (i.total === true ? 'Acceso completo' : 'Acceso completo <span class="muted">(sin asignar)</span>');
 let invites = [];
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -155,14 +185,18 @@ onAuthStateChanged(auth, async (user) => {
 
 async function checkKey() {
   const s = await getDoc(doc(db, 'config', 'llave'));
-  $('k-status').innerHTML = s.exists() ? '<span class="ok">✓ Llave cargada</span> · huella ' + esc(s.data().huella || '—') + ' · ' + esc(fecha(s.data().cargada)) : '<span class="bad">Todavía no se ha cargado la llave.</span> Los directores no podrán abrir el tablero hasta que la cargues.';
+  $('k-status').innerHTML = s.exists() ? '<span class="ok">✓ Llave cargada</span> · huella ' + esc(s.data().huella || '—') + ' · ' + (s.data().carreras ? esc(s.data().carreras) + ' llaves de carrera' : '<span class="bad">sin llaves por carrera: carga el archivo nuevo</span>') + ' · ' + esc(fecha(s.data().cargada)) : '<span class="bad">Todavía no se ha cargado la llave.</span> Los directores no podrán abrir el tablero hasta que la cargues.';
 }
 $('k-up').onclick = async () => {
   const f = $('k-file').files[0]; if (!f) { alertMsg('Elige el archivo llave-tablero.json.'); return; }
   try {
     const j = JSON.parse(await f.text());
     if (j.tipo !== 'llave-tablero-utpl' || !j.k) throw new Error('Ese archivo no es la llave del tablero.');
-    await setDoc(doc(db, 'config', 'llave'), { k: j.k, huella: j.huella || '', cargada: serverTimestamp() });
+    if (!Array.isArray(j.carreras)) throw new Error('Esta llave es de la versión anterior. Usa el llave-tablero.json nuevo (versión por carreras).');
+    const w = writeBatch(db);
+    w.set(doc(db, 'config', 'llave'), { k: j.k, huella: j.huella || '', carreras: j.carreras.length, cargada: serverTimestamp() });
+    j.carreras.forEach((c) => w.set(doc(db, 'config', c.id), { k: c.k, nombre: c.nombre }));
+    await w.commit();
     $('k-file').value = ''; checkKey();
   } catch (e) { $('k-status').innerHTML = '<span class="bad">' + esc(e.message || e.code) + '</span>'; }
 };
@@ -223,14 +257,16 @@ function render() {
   const q = $('q').value.trim().toLowerCase();
   const used = invites.filter((i) => i.uid).length;
   $('stats').innerHTML = '<div><b>' + invites.length + '</b>códigos</div><div><b>' + used + '</b>activados</div><div><b>' + invites.filter((i) => i.enviado && !i.uid).length + '</b>correo enviado, sin activar</div><div><b>' + invites.filter((i) => !i.enviado && !i.uid).length + '</b>sin enviar</div>';
-  $('tb').innerHTML = invites.filter((i) => !q || [i.nombre, i.correo, i.detalle, i.id, i.email].join(' ').toLowerCase().includes(q.replace(/-/g, ''))).map((i) =>
+  $('tb').innerHTML = invites.filter((i) => !q || [i.nombre, i.correo, i.detalle, i.id, i.email, (i.carreras || []).map((id) => CAR_NAME.get(id)).join(' ')].join(' ').toLowerCase().includes(q.replace(/-/g, ''))).map((i) =>
     '<tr><td>' + esc(i.nombre) + (i.detalle ? '<div class="muted">' + esc(i.detalle) + '</div>' : '') + '</td>' +
     '<td>' + esc(i.correo) + '</td><td><code>' + esc(fmt(i.id)) + '</code></td>' +
+    '<td style="max-width:220px">' + ambTxt(i) + '</td>' +
     '<td>' + (i.uid ? '<span class="pill u">Activado</span><div class="muted">' + esc(i.email) + '<br>' + esc(fecha(i.usado)) + '</div>' : (i.enviado ? '<span class="pill s">Correo enviado</span><div class="muted">' + esc(fecha(i.enviado)) + '</div>' : '<span class="pill p">Pendiente</span>')) + '</td>' +
     '<td style="white-space:nowrap"><button class="sm" data-act="mail" data-id="' + esc(i.id) + '">' + (i.enviado ? 'Ver correo' : 'Enviar correo') + '</button> ' +
+    '<button class="sec sm" data-act="amb" data-id="' + esc(i.id) + '">Ámbito</button> ' +
     '<button class="sec sm" data-act="new" data-id="' + esc(i.id) + '">Nuevo código</button> ' +
     '<button class="danger sm" data-act="del" data-id="' + esc(i.id) + '">Quitar</button></td></tr>').join('') ||
-    '<tr><td colspan="5" class="muted">Sin códigos todavía.</td></tr>';
+    '<tr><td colspan="6" class="muted">Sin códigos todavía.</td></tr>';
 }
 
 $('tb').onclick = async (ev) => {
@@ -238,6 +274,7 @@ $('tb').onclick = async (ev) => {
   const i = invites.find((x) => x.id === b.dataset.id); if (!i) return;
   const act = b.dataset.act;
   if (act === 'mail') { openMail(i); return; }
+  if (act === 'amb') { openAmb(i); return; }
   const msg = act === 'del' ? '¿Quitar el acceso de ' + i.nombre + '? Su código dejará de funcionar' + (i.uid ? ' y ya no podrá abrir el tablero.' : '.') :
     '¿Crear un código nuevo para ' + i.nombre + '? El actual dejará de funcionar' + (i.uid ? ' y tendrá que activar su acceso otra vez.' : '.');
   if (!confirm(msg)) return;
@@ -245,7 +282,7 @@ $('tb').onclick = async (ev) => {
   const w = writeBatch(db);
   w.delete(doc(db, 'invites', i.id));
   if (i.uid) w.delete(doc(db, 'members', i.uid));
-  if (act === 'new') w.set(doc(db, 'invites', newCode()), { nombre: i.nombre, correo: i.correo || '', detalle: i.detalle || '', creado: serverTimestamp() });
+  if (act === 'new') w.set(doc(db, 'invites', newCode()), { nombre: i.nombre, correo: i.correo || '', detalle: i.detalle || '', total: i.total !== false, carreras: i.carreras || [], creado: serverTimestamp() });
   try { await w.commit(); await load(); } catch (e) { alert('No se pudo completar (' + e.code + ').'); b.disabled = false; }
 };
 
@@ -261,7 +298,9 @@ $('b-gen').onclick = async () => {
     if (!nombre || /^nombre/i.test(nombre)) { if (nombre) continue; skipped.push(line); continue; }
     if (correo && have.has(correo)) { skipped.push(nombre + ' (ya tiene código)'); continue; }
     if (correo) have.add(correo);
-    rows.push({ nombre, correo, detalle: rest.slice(1).join(' · ') });
+    const detalle = rest.slice(1).join(' · '), a = ambitoDe(detalle);
+    if (a.sin) { skipped.push(nombre + ' (carrera «' + a.sin + '» sin datos en el tablero)'); continue; }
+    rows.push({ nombre, correo, detalle, total: a.total, carreras: a.carreras });
   }
   if (!rows.length) { $('m-gen').textContent = 'No encontré personas nuevas en la lista.' + (skipped.length ? ' Omitidas: ' + skipped.join(', ') : ''); return; }
   $('b-gen').disabled = true; $('m-gen').textContent = 'Creando ' + rows.length + ' códigos…';
@@ -280,11 +319,69 @@ $('b-gen').onclick = async () => {
 
 $('b-csv').onclick = async () => {
   const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
-  const rows = invites.map((i) => ({ 'Nombre': i.nombre, 'Correo UTPL': i.correo || '', 'Carrera o cargo': i.detalle || '', 'Código': fmt(i.id), 'Enlace': BOARD, 'Estado': i.uid ? 'Activado' : (i.enviado ? 'Correo enviado' : 'Sin enviar'), 'Correo enviado': fecha(i.enviado), 'Cuenta de Google': i.email || '', 'Fecha de activación': fecha(i.usado) }));
+  const rows = invites.map((i) => ({ 'Nombre': i.nombre, 'Correo UTPL': i.correo || '', 'Carrera o cargo': i.detalle || '', 'Ámbito': i.total === false ? (i.carreras || []).map((id) => CAR_NAME.get(id) || id).join(', ') : 'Acceso completo', 'Código': fmt(i.id), 'Enlace': BOARD, 'Estado': i.uid ? 'Activado' : (i.enviado ? 'Correo enviado' : 'Sin enviar'), 'Correo enviado': fecha(i.enviado), 'Cuenta de Google': i.email || '', 'Fecha de activación': fecha(i.usado) }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 34 }, { wch: 28 }, { wch: 34 }, { wch: 16 }, { wch: 40 }, { wch: 15 }, { wch: 16 }, { wch: 30 }, { wch: 18 }];
+  ws['!cols'] = [{ wch: 34 }, { wch: 28 }, { wch: 34 }, { wch: 34 }, { wch: 16 }, { wch: 40 }, { wch: 15 }, { wch: 16 }, { wch: 30 }, { wch: 18 }];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Códigos');
   XLSX.writeFile(wb, 'codigos_acceso_tablero.xlsx');
+};
+
+// Ámbito por código
+let ambCur = null;
+function drawAmbList() {
+  const q = norm($('a-q').value), sel = new Set(ambCur.sel);
+  $('a-list').innerHTML = CARS.filter((c) => !q || norm(c.nombre).includes(q)).map((c) =>
+    '<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-c="' + esc(c.id) + '"' + (sel.has(c.id) ? ' checked' : '') + (ambCur.total ? ' disabled' : '') + '> ' + esc(c.nombre) + '</label>').join('');
+}
+function openAmb(i) {
+  ambCur = { i, total: i.total !== false, sel: [...(i.carreras || [])] };
+  $('a-name').textContent = i.nombre; $('a-total').checked = ambCur.total; $('a-q').value = ''; $('a-msg').textContent = '';
+  drawAmbList(); $('amb').classList.add('on');
+}
+$('a-list').onchange = (ev) => { const c = ev.target.dataset.c; if (!c) return; ambCur.sel = ev.target.checked ? [...new Set([...ambCur.sel, c])] : ambCur.sel.filter((x) => x !== c); };
+$('a-total').onchange = () => { ambCur.total = $('a-total').checked; drawAmbList(); };
+$('a-q').oninput = drawAmbList;
+const closeAmb = () => { $('amb').classList.remove('on'); ambCur = null; };
+$('a-x').onclick = closeAmb; $('amb').onclick = (ev) => { if (ev.target.id === 'amb') closeAmb(); };
+$('a-save').onclick = async () => {
+  if (!ambCur.total && !ambCur.sel.length) { $('a-msg').textContent = 'Elige al menos una carrera o marca acceso completo.'; return; }
+  $('a-save').disabled = true;
+  try { const w = writeBatch(db); w.update(doc(db, 'invites', ambCur.i.id), { total: ambCur.total, carreras: ambCur.total ? [] : ambCur.sel }); await w.commit(); closeAmb(); await load(); }
+  catch (e) { $('a-msg').textContent = 'No se pudo guardar (' + e.code + ').'; }
+  $('a-save').disabled = false;
+};
+
+// Asignar ámbitos desde el Excel de accesos de directores
+$('x-file').onchange = async () => {
+  const f = $('x-file').files[0]; if (!f) return;
+  $('m-x').textContent = 'Leyendo el Excel…';
+  try {
+    const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
+    const wb = XLSX.read(await f.arrayBuffer());
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    const h = rows.findIndex((r) => r.some((c) => /correo/i.test(String(c))));
+    if (h < 0) throw new Error('No encontré la columna de correo.');
+    const hd = rows[h].map((c) => norm(c)), cMail = hd.findIndex((c) => c.includes('correo')), cCar = hd.findIndex((c) => c.includes('carrera'));
+    const per = new Map(), sinDatos = new Set();
+    rows.slice(h + 1).forEach((r) => {
+      const mail = String(r[cMail] || '').trim().toLowerCase(); if (!mail.includes('@')) return;
+      const a = ambitoDe(r[cCar]); const cur = per.get(mail) || { total: false, carreras: [] };
+      if (a.total) cur.total = true; else if (a.sin) sinDatos.add(a.sin); else cur.carreras = [...new Set([...cur.carreras, ...a.carreras])];
+      per.set(mail, cur);
+    });
+    const w = writeBatch(db); let n = 0, nc = 0, nt = 0; const usados = new Set();
+    invites.forEach((i) => { const mail = (i.correo || '').toLowerCase(), a = per.get(mail); if (!a) return; usados.add(mail);
+      if (!a.total && !a.carreras.length) return;
+      w.update(doc(db, 'invites', i.id), { total: a.total, carreras: a.total ? [] : a.carreras }); n++; if (a.total) nt++; else nc++; });
+    if (n) await w.commit();
+    const faltan = [...per.keys()].filter((m) => !usados.has(m));
+    $('m-x').innerHTML = '✓ Ámbito asignado a ' + n + ' códigos: ' + nc + ' por carrera y ' + nt + ' con acceso completo.' +
+      (faltan.length ? '<br>Sin código creado en el panel (' + faltan.length + '): ' + esc(faltan.join(', ')) : '') +
+      (sinDatos.size ? '<br>Carreras sin datos en el tablero (no se asignaron): ' + esc([...sinDatos].join(', ')) : '') +
+      '<br>Los códigos que no están en el Excel conservan su ámbito actual.';
+    await load();
+  } catch (e) { $('m-x').innerHTML = '<span class="bad">' + esc(e.message || e.code) + '</span>'; }
+  $('x-file').value = '';
 };
 </script>
 </body>
