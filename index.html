@@ -94,8 +94,8 @@ let FS = null;
 const fs = () => FS || (FS = import('https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js').then((m) => ({ m, db: m.getFirestore(app) })));
 // Interfaz del tablero (sin datos): se descarga en segundo plano mientras la persona ingresa.
 let appP = null;
-const getApp = () => appP || (appP = fetch('app.html?v=304f8533da').then((r) => { if (!r.ok) throw new Error('datos-' + r.status); return r.text(); }).catch((e) => { appP = null; throw e; }));
-const getBin = (id) => fetch('datos/' + id + '.bin?v=bb7c01fe5c').then((r) => { if (!r.ok) throw new Error('datos-' + r.status); return r.arrayBuffer(); });
+const getApp = () => appP || (appP = fetch('app.html?v=dd67f1f3bd').then((r) => { if (!r.ok) throw new Error('datos-' + r.status); return r.text(); }).catch((e) => { appP = null; throw e; }));
+const getBin = (id) => fetch('datos/' + id + '.bin?v=ed7a25778a').then((r) => { if (!r.ok) throw new Error('datos-' + r.status); return r.arrayBuffer(); });
 
 var $ = function (id) { return document.getElementById(id); };
 function show(v, txt) { ['v-load', 'v-signin', 'v-code'].forEach(function (id) { $(id).classList.toggle('on', id === v); }); if (txt) $('load-txt').textContent = txt; }

@@ -699,7 +699,7 @@ window.dash = (function () {
   <header class="pm-head" id="resumen">
     <div class="pm-brand">UTPL · Universidad Técnica Particular de Loja</div>
     <h1>Aplicación de metodologías por carrera · Abril–agosto 2026</h1>
-    <p>Promedio de aplicación de <b data-draw="t-prom" data-source="resumen" data-field="promedio">—</b> en <b data-draw="t-total" data-source="resumen" data-field="asignaturas">—</b> asignaturas de <span data-draw="t-ambito">—</span>; <b data-draw="t-mejorar" data-source="resumen" data-field="por_mejorar">—</b> están por mejorar. El estado «Por validar» se muestra como «Por mejorar».</p>
+    <p>Promedio de aplicación de <b data-draw="t-prom" data-source="resumen" data-field="promedio">—</b> en <b data-draw="t-total" data-source="resumen" data-field="asignaturas">—</b> asignaturas de <span data-draw="t-ambito">—</span>; <b data-draw="t-mejorar" data-source="resumen" data-field="por_mejorar">—</b> no aplican la metodología. El estado «Por validar» se muestra como «No aplica».</p>
   </header>
 
   <div class="pm-filters" id="filtros">
@@ -712,9 +712,9 @@ window.dash = (function () {
     <label>Estado (tabla de asignaturas)
       <select class="pm-f-estado" aria-label="Estado">
         <option value="">Todos los estados</option>
-        <option value="Sí cumple">Sí cumple</option>
-        <option value="Cumple parcialmente">Cumple parcialmente</option>
-        <option value="Por mejorar">Por mejorar</option>
+        <option value="Aplica">Aplica</option>
+        <option value="Aplica parcialmente">Aplica parcialmente</option>
+        <option value="No aplica">No aplica</option>
       </select>
     </label>
     <button class="pm-btn pm-reset" type="button">Restablecer</button>
@@ -727,17 +727,17 @@ window.dash = (function () {
       <div class="pm-sub">Con lista de cotejo de metodología</div>
     </div>
     <div class="pm-tile">
-      <div class="pm-lbl"><span class="pm-dot pm-ok"></span>Sí cumple</div>
+      <div class="pm-lbl"><span class="pm-dot pm-ok"></span>Aplica</div>
       <div class="pm-big" data-draw="k-si" data-source="resumen" data-field="si_cumple">—</div>
       <div class="pm-sub" data-draw="k-si-p" data-source="resumen">—</div>
     </div>
     <div class="pm-tile pm-t-warn">
-      <div class="pm-lbl"><span class="pm-dot pm-warn"></span>Cumple parcialmente</div>
+      <div class="pm-lbl"><span class="pm-dot pm-warn"></span>Aplica parcialmente</div>
       <div class="pm-big" data-draw="k-par" data-source="resumen" data-field="cumple_parcialmente">—</div>
       <div class="pm-sub" data-draw="k-par-p" data-source="resumen">—</div>
     </div>
     <div class="pm-tile pm-t-bad">
-      <div class="pm-lbl"><span class="pm-dot pm-bad"></span>Por mejorar</div>
+      <div class="pm-lbl"><span class="pm-dot pm-bad"></span>No aplica</div>
       <div class="pm-big" data-draw="k-mej" data-source="resumen" data-field="por_mejorar">—</div>
       <div class="pm-sub" data-draw="k-mej-p" data-source="resumen">—</div>
     </div>
@@ -755,9 +755,9 @@ window.dash = (function () {
       <h2>Estado por facultad</h2>
       <p class="pm-note">Proporción de asignaturas en cada estado, para todas las facultades o la facultad elegida.</p>
       <div class="pm-legend">
-        <span><span class="pm-dot pm-ok"></span>Sí cumple</span>
-        <span><span class="pm-dot pm-warn"></span>Cumple parcialmente</span>
-        <span><span class="pm-dot pm-bad"></span>Por mejorar</span>
+        <span><span class="pm-dot pm-ok"></span>Aplica</span>
+        <span><span class="pm-dot pm-warn"></span>Aplica parcialmente</span>
+        <span><span class="pm-dot pm-bad"></span>No aplica</span>
       </div>
       <div class="pm-chart" data-draw="c-facultad" data-source="resumen"></div>
     </div>
@@ -779,9 +779,9 @@ window.dash = (function () {
           <th data-field="facultad" class="pm-hide-narrow">Facultad</th>
           <th data-field="asignaturas" class="pm-num">Asignaturas</th>
           <th data-field="promedio">Aplicación promedio</th>
-          <th data-field="si_cumple" class="pm-num">Sí cumple</th>
-          <th data-field="cumple_parcialmente" class="pm-num">Cumple parcialmente</th>
-          <th data-field="por_mejorar" class="pm-num">Por mejorar</th>
+          <th data-field="si_cumple" class="pm-num">Aplica</th>
+          <th data-field="cumple_parcialmente" class="pm-num">Aplica parcialmente</th>
+          <th data-field="por_mejorar" class="pm-num">No aplica</th>
         </tr></thead>
         <tbody data-draw="t-carreras"></tbody>
       </table>
@@ -830,9 +830,9 @@ window.dash = (function () {
           let g = m.get(k);
           if (!g) { g = {facultad: f, carrera: c, asignaturas: 0, suma: 0, si_cumple: 0, cumple_parcialmente: 0, por_mejorar: 0}; m.set(k, g); }
           g.asignaturas += 1; g.suma += p;
-          if (r.estado === 'Sí cumple') g.si_cumple += 1;
-          else if (r.estado === 'Cumple parcialmente') g.cumple_parcialmente += 1;
-          else if (r.estado === 'Por mejorar') g.por_mejorar += 1;
+          if (r.estado === 'Aplica') g.si_cumple += 1;
+          else if (r.estado === 'Aplica parcialmente') g.cumple_parcialmente += 1;
+          else if (r.estado === 'No aplica') g.por_mejorar += 1;
         }
       }
       return [...m.values()].map(({suma, ...g}) => ({...g, promedio: Math.round(suma / g.asignaturas * 10000) / 10000}));
@@ -973,9 +973,9 @@ window.dash = (function () {
     el.style.minHeight = Hh + 'px';
     const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${Hh}`).style('font-family', 'var(--font-anthropic-sans)');
     const parts = [
-      {k: 'si_cumple', label: 'Sí cumple', color: 'var(--utpl-azul)', v: r.si_cumple},
-      {k: 'cumple_parcialmente', label: 'Cumple parcialmente', color: 'var(--utpl-amarillo)', v: r.cumple_parcialmente},
-      {k: 'por_mejorar', label: 'Por mejorar', color: 'var(--utpl-rojo)', v: r.por_mejorar},
+      {k: 'si_cumple', label: 'Aplica', color: 'var(--utpl-azul)', v: r.si_cumple},
+      {k: 'cumple_parcialmente', label: 'Aplica parcialmente', color: 'var(--utpl-amarillo)', v: r.cumple_parcialmente},
+      {k: 'por_mejorar', label: 'No aplica', color: 'var(--utpl-rojo)', v: r.por_mejorar},
     ];
     const cx = stacked ? W / 2 : R + 8, cy = R + 8;
     const pie = d3.pie().value((d) => d.v).sort(null).padAngle(0.025);
@@ -1060,7 +1060,7 @@ window.dash = (function () {
       .on('pointermove', function (event, d) {
         d3.select(this.parentNode).select('circle').attr('r', 9);
         const [px, py] = d3.pointer(event, el);
-        tipShow(el, tip, [line('pm-tip-k', d.carrera), line('', 'Aplicación promedio: ' + H.pct.format(d.promedio)), line('', 'Asignaturas: ' + H.int.format(d.asignaturas)), line('', 'Sí cumple ' + d.si_cumple + ' · Parcial ' + d.cumple_parcialmente + ' · Por mejorar ' + d.por_mejorar)], px, py);
+        tipShow(el, tip, [line('pm-tip-k', d.carrera), line('', 'Aplicación promedio: ' + H.pct.format(d.promedio)), line('', 'Asignaturas: ' + H.int.format(d.asignaturas)), line('', 'Aplica ' + d.si_cumple + ' · Aplica parcialmente ' + d.cumple_parcialmente + ' · No aplica ' + d.por_mejorar)], px, py);
       })
       .on('pointerleave', function () { d3.select(this.parentNode).select('circle').attr('r', 7); tip.hidden = true; });
     cssAnim(el, 'pm-anim');
@@ -1079,7 +1079,7 @@ window.dash = (function () {
     el.style.minHeight = Math.max(Hh, 192) + 'px';
     const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${Hh}`).attr('font-size', 12).style('font-family', 'var(--font-anthropic-sans)');
     const x = d3.scaleLinear([0, 1], [0, W]);
-    const keys = [['si_cumple', 'Sí cumple', 'var(--utpl-azul)', '#FFFFFF'], ['cumple_parcialmente', 'Cumple parcialmente', 'var(--utpl-amarillo)', '#002F5F'], ['por_mejorar', 'Por mejorar', 'var(--utpl-rojo)', '#FFFFFF']];
+    const keys = [['si_cumple', 'Aplica', 'var(--utpl-azul)', '#FFFFFF'], ['cumple_parcialmente', 'Aplica parcialmente', 'var(--utpl-amarillo)', '#002F5F'], ['por_mejorar', 'No aplica', 'var(--utpl-rojo)', '#FFFFFF']];
     const tip = document.createElement('div'); tip.className = 'pm-tip'; tip.hidden = true;
     const uid = 'pmclip' + Math.random().toString(36).slice(2, 8);
     rows.forEach((r, i) => {
@@ -1116,7 +1116,7 @@ window.dash = (function () {
   // Tablas
   const T = window.pmHelpers;
   const td = (text, cls) => { const c = document.createElement('td'); if (cls) c.className = cls; c.textContent = text; return c; };
-  const estadoCls = {'Sí cumple': 'pm-ok', 'Cumple parcialmente': 'pm-warn', 'Por mejorar': 'pm-bad'};
+  const estadoCls = {'Aplica': 'pm-ok', 'Aplica parcialmente': 'pm-warn', 'No aplica': 'pm-bad'};
 
   dash.draw('t-carreras', (tb) => {
     const all = T.resumen();
@@ -1843,7 +1843,7 @@ window.dash = (function () {
 }
 </script>
 
-<p class="pm-pie">Fuentes: Oferta académica abril–agosto 2026 (hoja «PD y GD Rediseño») y PD_GD_cumplimiento abril–agosto 2026, docentes, distancia y presencial v5 (hojas «PD-ECTS-Rediseño», «GD-Rediseño», «Consolidado Docentes» y «Consolidado Departamentos») y Resumen de heteroevaluación abril–agosto 2026 con tecnologías (preguntas 8, 9 y 10). Estado «Por validar» mostrado como «Por mejorar»; facultad asignada según la carrera de la que nace la asignatura.</p>
+<p class="pm-pie">Fuentes: Oferta académica abril–agosto 2026 (hoja «PD y GD Rediseño») y PD_GD_cumplimiento abril–agosto 2026, docentes, distancia y presencial v5 (hojas «PD-ECTS-Rediseño», «GD-Rediseño», «Consolidado Docentes» y «Consolidado Departamentos») y Resumen de heteroevaluación abril–agosto 2026 con tecnologías (preguntas 8, 9 y 10). Estado «Por validar» mostrado como «No aplica»; facultad asignada según la carrera de la que nace la asignatura.</p>
 </div>
 <script>
 (function () {
