@@ -78,7 +78,7 @@
   <section>
     <h2>2. Crear códigos de acceso</h2>
     <p>Pega la lista de directores, una persona por línea: <strong>nombre</strong> y <strong>correo institucional</strong>, y si quieres una tercera columna con su carrera o cargo. Puedes copiar las columnas directamente desde Excel. Cada persona recibe un código único que solo sirve una vez.</p>
-    <p class="muted">Ámbito: si la tercera columna dice «Director/a o Subdirector/a de la Carrera de …», el código queda limitado a esa carrera. En cualquier otro caso, el código tiene acceso completo. Puedes cambiarlo después con el botón «Ámbito».</p>
+    <p class="muted">Ámbito: si la tercera columna dice «Director/a o Subdirector/a de la Carrera de …», el código queda limitado a esa carrera. En cualquier otro caso, el código tiene acceso completo. Puedes cambiarlo después con el botón «Editar».</p>
     <textarea id="list" placeholder="María Pérez	mperez@utpl.edu.ec	Carrera de Economía&#10;Juan Torres	jtorres@utpl.edu.ec	Departamento de Química"></textarea>
     <div class="row"><button id="b-gen">Crear códigos</button><span class="muted" id="m-gen"></span></div>
   </section>
@@ -100,7 +100,7 @@
     </div>
     <p class="muted" id="m-x"></p>
     <p class="muted" id="m-vis" style="margin:4px 0 0;font-weight:600"></p>
-    <p class="muted">«Enviar correo» muestra el mensaje completo y te deja abrirlo listo en Outlook (tu correo UTPL) o en Gmail; tú lo envías desde ahí y luego lo marcas como enviado. «Nuevo código» anula el anterior (y el acceso, si ya lo había activado) y crea otro para la misma persona. «Quitar» le retira el acceso por completo. «Descargar listado» descarga lo que estás viendo con el filtro y la búsqueda.</p>
+    <p class="muted">«Enviar correo» muestra el mensaje completo y te deja abrirlo listo en Outlook (tu correo UTPL) o en Gmail; tú lo envías desde ahí y luego lo marcas como enviado. «Nuevo código» anula el anterior (y el acceso, si ya lo había activado) y crea otro para la misma persona. «Editar» cambia nombre, correo, cargo y ámbito. «Quitar» le retira el acceso por completo. «Descargar listado» descarga lo que estás viendo con el filtro y la búsqueda.</p>
     <div style="max-height:560px;overflow:auto"><table>
       <thead><tr><th>Nombre</th><th>Correo UTPL</th><th>Código</th><th>Ámbito</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody id="tb"></tbody>
@@ -131,13 +131,18 @@
 
 <div class="modal" id="amb" role="dialog" aria-modal="true">
   <div class="mbox">
-    <div class="mhead"><h3>Ámbito de <span id="a-name"></span></h3><button id="a-x" aria-label="Cerrar">×</button></div>
+    <div class="mhead"><h3>Editar: <span id="a-name"></span></h3><button id="a-x" aria-label="Cerrar">×</button></div>
     <div class="mbody">
+      <div style="display:grid;gap:8px;margin-bottom:14px">
+        <label class="muted" style="display:grid;gap:4px">Nombre<input type="text" id="a-nom"></label>
+        <label class="muted" style="display:grid;gap:4px">Correo UTPL<input type="email" id="a-mail"></label>
+        <label class="muted" style="display:grid;gap:4px">Carrera o cargo<input type="text" id="a-det"></label>
+      </div>
       <label style="display:flex;gap:8px;align-items:center;font-weight:700"><input type="checkbox" id="a-total"> Acceso completo (todas las facultades, carreras y departamentos)</label>
       <p class="muted">Si no marcas acceso completo, elige una o más carreras. La persona verá solo los datos de esas carreras.</p>
       <input type="search" id="a-q" placeholder="Buscar carrera" style="width:100%">
       <div id="a-list" style="max-height:300px;overflow:auto;border:1px solid #E3E8EF;border-radius:8px;padding:6px 10px;margin-top:8px;display:grid;gap:4px"></div>
-      <div class="row" style="justify-content:flex-end"><span class="muted" id="a-msg"></span><button id="a-save">Guardar ámbito</button></div>
+      <div class="row" style="justify-content:flex-end"><span class="muted" id="a-msg"></span><button id="a-save">Guardar cambios</button></div>
     </div>
   </div>
 </div>
@@ -282,7 +287,7 @@ function render() {
     '<td style="max-width:220px">' + ambTxt(i) + '</td>' +
     '<td>' + (i.uid ? '<span class="pill u">Activado</span><div class="muted">' + esc(i.email) + '<br>' + esc(fecha(i.usado)) + '</div>' : (i.enviado ? '<span class="pill s">Correo enviado</span><div class="muted">' + esc(fecha(i.enviado)) + '</div>' : '<span class="pill p">Pendiente</span>')) + '</td>' +
     '<td style="white-space:nowrap"><button class="sm" data-act="mail" data-id="' + esc(i.id) + '">' + (i.enviado ? 'Ver correo' : 'Enviar correo') + '</button> ' +
-    '<button class="sec sm" data-act="amb" data-id="' + esc(i.id) + '">Ámbito</button> ' +
+    '<button class="sec sm" data-act="amb" data-id="' + esc(i.id) + '">Editar</button> ' +
     '<button class="sec sm" data-act="new" data-id="' + esc(i.id) + '">Nuevo código</button> ' +
     '<button class="danger sm" data-act="del" data-id="' + esc(i.id) + '">Quitar</button></td></tr>').join('') ||
     '<tr><td colspan="6" class="muted">' + (invites.length ? 'Ningún código coincide con el filtro.' : 'Sin códigos todavía.') + '</td></tr>';
@@ -356,7 +361,8 @@ function drawAmbList() {
 }
 function openAmb(i) {
   ambCur = { i, total: i.total !== false, sel: [...(i.carreras || [])] };
-  $('a-name').textContent = i.nombre; $('a-total').checked = ambCur.total; $('a-q').value = ''; $('a-msg').textContent = '';
+  $('a-name').textContent = i.nombre; $('a-nom').value = i.nombre || ''; $('a-mail').value = i.correo || ''; $('a-det').value = i.detalle || '';
+  $('a-total').checked = ambCur.total; $('a-q').value = ''; $('a-msg').textContent = '';
   drawAmbList(); $('amb').classList.add('on');
 }
 $('a-list').onchange = (ev) => { const c = ev.target.dataset.c; if (!c) return; ambCur.sel = ev.target.checked ? [...new Set([...ambCur.sel, c])] : ambCur.sel.filter((x) => x !== c); };
@@ -366,8 +372,13 @@ const closeAmb = () => { $('amb').classList.remove('on'); ambCur = null; };
 $('a-x').onclick = closeAmb; $('amb').onclick = (ev) => { if (ev.target.id === 'amb') closeAmb(); };
 $('a-save').onclick = async () => {
   if (!ambCur.total && !ambCur.sel.length) { $('a-msg').textContent = 'Elige al menos una carrera o marca acceso completo.'; return; }
+  const nombre = $('a-nom').value.trim(), correo = $('a-mail').value.trim().toLowerCase(), detalle = $('a-det').value.trim();
+  if (!nombre) { $('a-msg').textContent = 'Escribe el nombre.'; return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo)) { $('a-msg').textContent = 'Escribe un correo válido.'; return; }
+  const otro = invites.find((x) => x.id !== ambCur.i.id && (x.correo || '').toLowerCase() === correo);
+  if (otro && !confirm(correo + ' ya tiene otro código (' + otro.nombre + '). ¿Guardar igual? Luego conviene quitar uno de los dos.')) return;
   $('a-save').disabled = true;
-  try { const w = writeBatch(db); w.update(doc(db, 'invites', ambCur.i.id), { total: ambCur.total, carreras: ambCur.total ? [] : ambCur.sel }); await w.commit(); closeAmb(); await load(); }
+  try { const w = writeBatch(db); w.update(doc(db, 'invites', ambCur.i.id), { nombre, correo, detalle, total: ambCur.total, carreras: ambCur.total ? [] : ambCur.sel }); await w.commit(); closeAmb(); await load(); }
   catch (e) { $('a-msg').textContent = 'No se pudo guardar (' + e.code + ').'; }
   $('a-save').disabled = false;
 };
