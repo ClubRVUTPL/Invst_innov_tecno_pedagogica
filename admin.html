@@ -87,13 +87,20 @@
     <h2>3. Directores y códigos</h2>
     <div class="stats" id="stats"></div>
     <div class="row">
+      <select id="tipo" style="font:inherit;font-size:14px;padding:8px 10px;border:1px solid #C9D3DF;border-radius:8px">
+        <option value="">Todos los tipos de oferta</option>
+        <option value="maestria">Maestrías</option>
+        <option value="carrera">Directores y subdirectores de carrera</option>
+        <option value="ejecutivo">Ejecutivos (departamento, facultad, vicerrectorado)</option>
+      </select>
       <input type="search" id="q" placeholder="Buscar por nombre, correo o código" style="flex:1;min-width:220px">
       <button class="sec" id="b-csv">Descargar listado (Excel)</button>
       <button class="sec" id="b-reload">Actualizar</button>
       <label class="btn" style="background:#fff;color:#004A93;border:1px solid #004A93">Asignar ámbitos desde Excel de directores<input type="file" id="x-file" accept=".xlsx,.xls" hidden></label>
     </div>
     <p class="muted" id="m-x"></p>
-    <p class="muted">«Enviar correo» muestra el mensaje completo y te deja abrirlo listo en Outlook (tu correo UTPL) o en Gmail; tú lo envías desde ahí y luego lo marcas como enviado. «Nuevo código» anula el anterior (y el acceso, si ya lo había activado) y crea otro para la misma persona. «Quitar» le retira el acceso por completo.</p>
+    <p class="muted" id="m-vis" style="margin:4px 0 0;font-weight:600"></p>
+    <p class="muted">«Enviar correo» muestra el mensaje completo y te deja abrirlo listo en Outlook (tu correo UTPL) o en Gmail; tú lo envías desde ahí y luego lo marcas como enviado. «Nuevo código» anula el anterior (y el acceso, si ya lo había activado) y crea otro para la misma persona. «Quitar» le retira el acceso por completo. «Descargar listado» descarga lo que estás viendo con el filtro y la búsqueda.</p>
     <div style="max-height:560px;overflow:auto"><table>
       <thead><tr><th>Nombre</th><th>Correo UTPL</th><th>Código</th><th>Ámbito</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody id="tb"></tbody>
@@ -209,6 +216,17 @@ async function load() {
 }
 $('b-reload').onclick = load;
 $('q').oninput = render;
+$('tipo').onchange = render;
+// Tipo de oferta según el cargo: maestría, carrera o ejecutivo.
+function tipoDe(i) {
+  const t = norm((i.detalle || '') + ' ' + (i.correo ? '' : (i.nombre || '')));
+  if (/maestria|posgrado|programa de/.test(t)) return 'maestria';
+  if (i.total === false || /carrera/.test(t)) return 'carrera';
+  return 'ejecutivo';
+}
+const TIPO_TXT = { maestria: 'Maestría', carrera: 'Carrera', ejecutivo: 'Ejecutivo' };
+const visibles = () => { const q = $('q').value.trim().toLowerCase(), tp = $('tipo').value;
+  return invites.filter((i) => (!tp || tipoDe(i) === tp) && (!q || [i.nombre, i.correo, i.detalle, i.id, i.email, (i.carreras || []).map((id) => CAR_NAME.get(id)).join(' ')].join(' ').toLowerCase().includes(q.replace(/-/g, '')))); };
 
 function email(i) {
   const subj = 'Acceso al Tablero de Gestión Tecnopedagógica · UTPL';
@@ -257,8 +275,9 @@ function render() {
   const q = $('q').value.trim().toLowerCase();
   const used = invites.filter((i) => i.uid).length;
   $('stats').innerHTML = '<div><b>' + invites.length + '</b>códigos</div><div><b>' + used + '</b>activados</div><div><b>' + invites.filter((i) => i.enviado && !i.uid).length + '</b>correo enviado, sin activar</div><div><b>' + invites.filter((i) => !i.enviado && !i.uid).length + '</b>sin enviar</div>' + (invites.some((i) => !i.correo) ? '<div><b class="bad">' + invites.filter((i) => !i.correo).length + '</b>sin correo (revisar)</div>' : '');
-  $('tb').innerHTML = invites.filter((i) => !q || [i.nombre, i.correo, i.detalle, i.id, i.email, (i.carreras || []).map((id) => CAR_NAME.get(id)).join(' ')].join(' ').toLowerCase().includes(q.replace(/-/g, ''))).map((i) =>
-    '<tr><td>' + esc(i.nombre) + (i.detalle ? '<div class="muted">' + esc(i.detalle) + '</div>' : '') + '</td>' +
+  const vis = visibles();
+  $('tb').innerHTML = vis.map((i) =>
+    '<tr><td>' + esc(i.nombre) + (i.detalle ? '<div class="muted">' + esc(i.detalle) + '</div>' : '') + '<div class="muted" style="font-weight:700">' + TIPO_TXT[tipoDe(i)] + '</div></td>' +
     '<td>' + (i.correo ? esc(i.correo) : '<span class="bad">⚠ Sin correo</span>') + '</td><td><code>' + esc(fmt(i.id)) + '</code></td>' +
     '<td style="max-width:220px">' + ambTxt(i) + '</td>' +
     '<td>' + (i.uid ? '<span class="pill u">Activado</span><div class="muted">' + esc(i.email) + '<br>' + esc(fecha(i.usado)) + '</div>' : (i.enviado ? '<span class="pill s">Correo enviado</span><div class="muted">' + esc(fecha(i.enviado)) + '</div>' : '<span class="pill p">Pendiente</span>')) + '</td>' +
@@ -266,7 +285,8 @@ function render() {
     '<button class="sec sm" data-act="amb" data-id="' + esc(i.id) + '">Ámbito</button> ' +
     '<button class="sec sm" data-act="new" data-id="' + esc(i.id) + '">Nuevo código</button> ' +
     '<button class="danger sm" data-act="del" data-id="' + esc(i.id) + '">Quitar</button></td></tr>').join('') ||
-    '<tr><td colspan="6" class="muted">Sin códigos todavía.</td></tr>';
+    '<tr><td colspan="6" class="muted">' + (invites.length ? 'Ningún código coincide con el filtro.' : 'Sin códigos todavía.') + '</td></tr>';
+  $('m-vis').textContent = 'Mostrando ' + vis.length + ' de ' + invites.length + ' códigos.';
 }
 
 $('tb').onclick = async (ev) => {
@@ -320,9 +340,9 @@ $('b-gen').onclick = async () => {
 
 $('b-csv').onclick = async () => {
   const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
-  const rows = invites.map((i) => ({ 'Nombre': i.nombre, 'Correo UTPL': i.correo || '', 'Carrera o cargo': i.detalle || '', 'Ámbito': i.total === false ? (i.carreras || []).map((id) => CAR_NAME.get(id) || id).join(', ') : 'Acceso completo', 'Código': fmt(i.id), 'Enlace': BOARD, 'Estado': i.uid ? 'Activado' : (i.enviado ? 'Correo enviado' : 'Sin enviar'), 'Correo enviado': fecha(i.enviado), 'Cuenta de Google': i.email || '', 'Fecha de activación': fecha(i.usado) }));
+  const rows = visibles().map((i) => ({ 'Tipo de oferta': TIPO_TXT[tipoDe(i)], 'Nombre': i.nombre, 'Correo UTPL': i.correo || '', 'Carrera o cargo': i.detalle || '', 'Ámbito': i.total === false ? (i.carreras || []).map((id) => CAR_NAME.get(id) || id).join(', ') : 'Acceso completo', 'Código': fmt(i.id), 'Enlace': BOARD, 'Estado': i.uid ? 'Activado' : (i.enviado ? 'Correo enviado' : 'Sin enviar'), 'Correo enviado': fecha(i.enviado), 'Cuenta de Google': i.email || '', 'Fecha de activación': fecha(i.usado) }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 34 }, { wch: 28 }, { wch: 34 }, { wch: 34 }, { wch: 16 }, { wch: 40 }, { wch: 15 }, { wch: 16 }, { wch: 30 }, { wch: 18 }];
+  ws['!cols'] = [{ wch: 12 }, { wch: 34 }, { wch: 28 }, { wch: 34 }, { wch: 34 }, { wch: 16 }, { wch: 40 }, { wch: 15 }, { wch: 16 }, { wch: 30 }, { wch: 18 }];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Códigos');
   XLSX.writeFile(wb, 'codigos_acceso_tablero.xlsx');
 };
