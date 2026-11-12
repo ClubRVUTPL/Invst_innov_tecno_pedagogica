@@ -256,10 +256,10 @@ $('e-sent').onclick = async () => {
 function render() {
   const q = $('q').value.trim().toLowerCase();
   const used = invites.filter((i) => i.uid).length;
-  $('stats').innerHTML = '<div><b>' + invites.length + '</b>códigos</div><div><b>' + used + '</b>activados</div><div><b>' + invites.filter((i) => i.enviado && !i.uid).length + '</b>correo enviado, sin activar</div><div><b>' + invites.filter((i) => !i.enviado && !i.uid).length + '</b>sin enviar</div>';
+  $('stats').innerHTML = '<div><b>' + invites.length + '</b>códigos</div><div><b>' + used + '</b>activados</div><div><b>' + invites.filter((i) => i.enviado && !i.uid).length + '</b>correo enviado, sin activar</div><div><b>' + invites.filter((i) => !i.enviado && !i.uid).length + '</b>sin enviar</div>' + (invites.some((i) => !i.correo) ? '<div><b class="bad">' + invites.filter((i) => !i.correo).length + '</b>sin correo (revisar)</div>' : '');
   $('tb').innerHTML = invites.filter((i) => !q || [i.nombre, i.correo, i.detalle, i.id, i.email, (i.carreras || []).map((id) => CAR_NAME.get(id)).join(' ')].join(' ').toLowerCase().includes(q.replace(/-/g, ''))).map((i) =>
     '<tr><td>' + esc(i.nombre) + (i.detalle ? '<div class="muted">' + esc(i.detalle) + '</div>' : '') + '</td>' +
-    '<td>' + esc(i.correo) + '</td><td><code>' + esc(fmt(i.id)) + '</code></td>' +
+    '<td>' + (i.correo ? esc(i.correo) : '<span class="bad">⚠ Sin correo</span>') + '</td><td><code>' + esc(fmt(i.id)) + '</code></td>' +
     '<td style="max-width:220px">' + ambTxt(i) + '</td>' +
     '<td>' + (i.uid ? '<span class="pill u">Activado</span><div class="muted">' + esc(i.email) + '<br>' + esc(fecha(i.usado)) + '</div>' : (i.enviado ? '<span class="pill s">Correo enviado</span><div class="muted">' + esc(fecha(i.enviado)) + '</div>' : '<span class="pill p">Pendiente</span>')) + '</td>' +
     '<td style="white-space:nowrap"><button class="sm" data-act="mail" data-id="' + esc(i.id) + '">' + (i.enviado ? 'Ver correo' : 'Enviar correo') + '</button> ' +
@@ -296,6 +296,7 @@ $('b-gen').onclick = async () => {
     const rest = parts.filter((p) => !p.includes('@'));
     const nombre = rest[0] || '';
     if (!nombre || /^nombre/i.test(nombre)) { if (nombre) continue; skipped.push(line); continue; }
+    if (!correo) { skipped.push(nombre + ' (sin correo)'); continue; }
     if (correo && have.has(correo)) { skipped.push(nombre + ' (ya tiene código)'); continue; }
     if (correo) have.add(correo);
     const detalle = rest.slice(1).join(' · '), a = ambitoDe(detalle);
